@@ -5,50 +5,37 @@ const submitContactForm = async (req, res) => {
   try {
     const contactData = req.body;
 
-    // Send email to admin/recipient
-    const emailResult = await emailService.sendContactEmail(contactData);
-
-    // Send confirmation email to user (optional)
-    await emailService.sendConfirmationEmail(contactData);
-
-    res.status(200).json({
-      success: true,
-      message: 'Contact form submitted successfully',
-      messageId: emailResult.messageId
-    });
-
-  } catch (error) {
-    console.error('Contact form submission error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send message. Please try again later.'
-    });
-  }
-};
-
-// New controller: Handle dynamic emails from query parameters
-const submitDynamicContactFormQuery = async (req, res) => {
-  try {
-    const contactData = req.body;  // All dynamic fields from user
-    const queryParams = req.query;  // recipientEmail, senderEmail, googleSheetLink, webhookUrl
-
-    // Send email to admin/recipient (from query)
-    const emailResult = await emailService.sendDynamicContactEmailFromQuery(contactData, queryParams);
-
-    // Send confirmation email to user (from query)
-    await emailService.sendDynamicConfirmationEmailFromQuery(contactData, queryParams);
-
-    // Process Google Sheets if link is provided (non-blocking - don't fail if this fails)
+    // Process Google Sheets if configured (non-blocking - don't fail if this fails)
     let googleSheetsResult = null;
-    if (queryParams.googleSheetLink) {
+    const googleSheetsUrl = process.env.GOOGLE_SHEETS_URL;
+    
+    if (googleSheetsUrl) {
       try {
+        console.log('📊 Processing Google Sheets integration...');
         googleSheetsResult = await googleSheetsService.processGoogleSheets(
-          queryParams.googleSheetLink,
-          queryParams.webhookUrl, // Optional webhook URL for writing data
+          googleSheetsUrl,
+          process.env.GOOGLE_SHEETS_WEBHOOK_URL, // Optional webhook URL
           contactData
         );
         if (googleSheetsResult.success) {
           console.log('✅ Google Sheets processing successful');
+          console.log('📋 Spreadsheet ID:', googleSheetsResult.spreadsheetId);
+          
+          // Check if data was actually submitted
+          if (googleSheetsResult.submissionResult) {
+            if (googleSheetsResult.submissionResult.success) {
+              console.log('✅ Data successfully saved to Google Sheets');
+              console.log('📊 Method used:', googleSheetsResult.submissionResult.method || 'Webhook');
+            } else {
+              console.error('❌ Google Sheets data submission FAILED:');
+              console.error('   Error:', googleSheetsResult.submissionResult.error);
+              console.error('   ⚠️  Emails sent, but data NOT saved to Google Sheets!');
+              console.error('   💡 Check your .env configuration (Service Account or Webhook URL)');
+            }
+          } else {
+            console.log('⚠️  Google Sheets URL validated, but no submission method configured');
+            console.log('   💡 Set GOOGLE_SERVICE_ACCOUNT_PATH or GOOGLE_SHEETS_WEBHOOK_URL in .env');
+          }
         } else {
           console.log('⚠️ Google Sheets processing failed (non-critical):', googleSheetsResult.error);
         }
@@ -57,30 +44,34 @@ const submitDynamicContactFormQuery = async (req, res) => {
         console.error('⚠️ Google Sheets processing error (non-critical):', googleSheetsError.message);
         googleSheetsResult = {
           success: false,
-          error: googleSheetsError.message
+          error: googleSheetsError.message,
+          sheetUrl: googleSheetsUrl
         };
       }
+    } else {
+      console.log('ℹ️ Google Sheets URL not configured (GOOGLE_SHEETS_URL not set in .env)');
     }
+
+    // Send email to admin/recipient (include Google Sheets link)
+    const emailResult = await emailService.sendContactEmail(contactData, googleSheetsResult);
+
+    // Send confirmation email to user (optional)
+    await emailService.sendConfirmationEmail(contactData);
 
     // Build response
     const response = {
       success: true,
-      message: 'Contact form submitted successfully with dynamic emails from query',
-      messageId: emailResult.messageId,
-      recipientEmail: emailResult.recipientEmail,
-      senderEmail: queryParams.senderEmail || process.env.EMAIL_USER
+      message: 'Contact form submitted successfully',
+      messageId: emailResult.messageId
     };
 
-    // Add Google Sheets result if available
+    // Add Google Sheets info to response if available
     if (googleSheetsResult) {
       response.googleSheets = {
         processed: googleSheetsResult.success,
-        sheetLink: queryParams.googleSheetLink,
+        sheetUrl: googleSheetsResult.sheetUrl || googleSheetsUrl,
         spreadsheetId: googleSheetsResult.spreadsheetId
       };
-      if (!googleSheetsResult.success) {
-        response.googleSheets.error = googleSheetsResult.error;
-      }
       if (googleSheetsResult.submissionResult) {
         response.googleSheets.submitted = googleSheetsResult.submissionResult.success;
         if (!googleSheetsResult.submissionResult.success) {
@@ -92,11 +83,10 @@ const submitDynamicContactFormQuery = async (req, res) => {
     res.status(200).json(response);
 
   } catch (error) {
-    console.error('Dynamic contact form submission error (query):', error);
+    console.error('Contact form submission error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to send message. Please try again later.',
-      error: error.message
+      message: 'Failed to send message. Please try again later.'
     });
   }
 };
@@ -111,6 +101,5 @@ const healthCheck = (req, res) => {
 
 module.exports = {
   submitContactForm,
-  submitDynamicContactFormQuery,
   healthCheck
 };

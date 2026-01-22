@@ -137,6 +137,15 @@ class GoogleSheetsService {
         const { headers, values } = this.convertToHeaderValueFormat(contactData);
         const rowData = values; // Use values that match headers exactly
         
+        // Log what's being saved to Google Sheets
+        console.log('📊 Saving to Google Sheets via Webhook:');
+        console.log('   Headers:', headers.join(', '));
+        headers.forEach((header, index) => {
+          if (header !== 'Timestamp' && values[index]) {
+            console.log(`   ${header}: ${values[index]}`);
+          }
+        });
+        
         const postData = JSON.stringify({
           headers: headers, // Send headers so Apps Script can create them dynamically
           data: rowData, // Values in exact same order as headers
@@ -185,11 +194,13 @@ class GoogleSheetsService {
                 });
               } else {
                 console.log('✅ Data submitted to Google Sheets successfully');
+                console.log('📋 Saved fields:', headers.filter(h => h !== 'Timestamp' && h !== '').join(', '));
                 console.log('📊 Response:', parsedResponse || responseData.substring(0, 200));
                 resolve({
                   success: true,
                   message: 'Data submitted to Google Sheets successfully',
-                  response: parsedResponse
+                  response: parsedResponse,
+                  savedFields: headers.filter(h => h !== 'Timestamp' && h !== '')
                 });
               }
             } else {
@@ -318,6 +329,15 @@ class GoogleSheetsService {
       // Get headers and values for dynamic field storage
       const { headers, values } = this.convertToHeaderValueFormat(contactData);
       const rowData = values; // Use values that match headers exactly
+      
+      // Log what's being saved to Google Sheets
+      console.log('📊 Saving to Google Sheets:');
+      console.log('   Headers:', headers.join(', '));
+      headers.forEach((header, index) => {
+        if (header !== 'Timestamp' && values[index]) {
+          console.log(`   ${header}: ${values[index]}`);
+        }
+      });
 
       // Check if headers exist, add them if not
       const range = `${sheetName}!A1:ZZ1`; // Extended range for many columns
@@ -404,10 +424,12 @@ class GoogleSheetsService {
       });
 
       console.log('✅ Data submitted to Google Sheets via API successfully');
+      console.log('📋 Saved fields:', headers.filter(h => h !== 'Timestamp' && h !== '').join(', '));
       return {
         success: true,
         message: 'Data submitted to Google Sheets via API successfully',
-        method: 'Service Account API'
+        method: 'Service Account API',
+        savedFields: headers.filter(h => h !== 'Timestamp' && h !== '')
       };
 
     } catch (error) {
@@ -491,10 +513,15 @@ class GoogleSheetsService {
     }
     // No method configured
     else {
-      console.log('⚠️ No Google Sheets write method configured (no service account or webhook URL)');
+      console.error('❌ No Google Sheets write method configured!');
+      console.error('   Missing: Service Account OR Webhook URL');
+      console.error('   💡 Set ONE of these in .env:');
+      console.error('      - GOOGLE_SERVICE_ACCOUNT_PATH=./service-account-key.json (Recommended)');
+      console.error('      - OR GOOGLE_SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/YOUR_WEBHOOK_ID/exec');
+      console.error('   📚 See GOOGLE_SHEETS_SETUP.md for detailed instructions');
       submissionResult = {
         success: false,
-        error: 'No webhook URL configured. Please set GOOGLE_SHEETS_WEBHOOK_URL in .env file. See GOOGLE_SHEETS_SETUP.md for setup instructions.'
+        error: 'No write method configured. Set GOOGLE_SERVICE_ACCOUNT_PATH or GOOGLE_SHEETS_WEBHOOK_URL in .env file. See GOOGLE_SHEETS_SETUP.md for setup instructions.'
       };
     }
 
