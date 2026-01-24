@@ -12,7 +12,8 @@
     "test-email": "node scripts/test-email-config.js",
     "test-gmail": "node scripts/test-gmail-connection.js",
     "test-dns": "node scripts/test-dns-connectivity.js",
-    "test-port": "node scripts/test-smtp-port.js"
+    "test-port": "node scripts/test-smtp-port.js",
+    "docs:pdf": "node scripts/generate-api-docs-pdf.js"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +29,8 @@
     "nodemailer": "^7.0.12"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.1.11",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^23.11.1"
   }
 }
