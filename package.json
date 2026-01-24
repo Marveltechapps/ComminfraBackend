@@ -8,7 +8,11 @@
     "dev": "nodemon src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "check-sheets": "node scripts/check-google-sheets-config.js",
-    "find-unused": "node scripts/find-unused-files.js"
+    "find-unused": "node scripts/find-unused-files.js",
+    "test-email": "node scripts/test-email-config.js",
+    "test-gmail": "node scripts/test-gmail-connection.js",
+    "test-dns": "node scripts/test-dns-connectivity.js",
+    "test-port": "node scripts/test-smtp-port.js"
   },
   "keywords": [],
   "author": "",

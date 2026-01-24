@@ -1,4 +1,28 @@
 const Joi = require('joi');
+const fs = require('fs');
+const path = require('path');
+const DEBUG_LOG_PATH = path.join(__dirname, '../../.cursor/debug.log');
+const debugLog = (location, message, data, hypothesisId) => {
+  try {
+    // Ensure directory exists
+    const logDir = path.dirname(DEBUG_LOG_PATH);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logEntry = JSON.stringify({
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId
+    }) + '\n';
+    fs.appendFileSync(DEBUG_LOG_PATH, logEntry, 'utf8');
+  } catch (e) {
+    // Silently fail - logging should never break the app
+  }
+};
 
 // Stricter email validation function
 const validateEmailFormat = (value, helpers) => {
@@ -69,22 +93,52 @@ const contactValidationSchema = Joi.object({
 }).unknown(true); // Allow any other fields to pass through without validation
 
 const validateContactForm = (req, res, next) => {
-  const { error } = contactValidationSchema.validate(req.body, { abortEarly: false });
+  // #region agent log
+  debugLog('validationMiddleware.js:79', 'validateContactForm entry', {hasBody:!!req.body,bodyType:typeof req.body,contentType:req.headers['content-type']}, 'H3');
+  // #endregion
+  try {
+    // Check if req.body exists before validating
+    if (!req.body || typeof req.body !== 'object') {
+      // #region agent log
+      debugLog('validationMiddleware.js:87', 'req.body missing in validation', {bodyType:typeof req.body}, 'H3');
+      // #endregion
+      console.error('❌ [VALIDATION] req.body is missing or invalid');
+      console.error('   req.body type:', typeof req.body);
+      console.error('   req.body value:', req.body);
+      return res.status(400).json({
+        success: false,
+        message: 'Request body is missing or invalid',
+        error: 'The request body could not be parsed. Please check Content-Type header.'
+      });
+    }
 
-  if (error) {
-    const errors = error.details.map(detail => ({
-      field: detail.path[0],
-      message: detail.message
-    }));
+    const { error } = contactValidationSchema.validate(req.body, { abortEarly: false });
+    // #region agent log
+    debugLog('validationMiddleware.js:98', 'validation result', {hasError:!!error,email:req.body?.email}, 'H3');
+    // #endregion
 
-    return res.status(400).json({
+    if (error) {
+      const errors = error.details.map(detail => ({
+        field: detail.path[0],
+        message: detail.message
+      }));
+
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    next();
+  } catch (validationError) {
+    console.error('❌ [VALIDATION] Unexpected error in validation middleware:', validationError);
+    return res.status(500).json({
       success: false,
-      message: 'Validation failed',
-      errors
+      message: 'Validation error occurred',
+      error: validationError.message
     });
   }
-
-  next();
 };
 
 module.exports = { 
